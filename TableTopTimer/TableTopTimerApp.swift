@@ -10,9 +10,11 @@ import SwiftData
 
 @main
 struct TableTopTimerApp: App {
+    @State private var timerManager = TimerManager()
+    
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            TimerItem.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -26,6 +28,7 @@ struct TableTopTimerApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(timerManager)
         }
         .modelContainer(sharedModelContainer)
     }
