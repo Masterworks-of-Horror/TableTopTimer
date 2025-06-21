@@ -16,6 +16,8 @@ final class TimerItem {
     var order: Int
     var createdAt: Date
     
+    var list: TimerList?
+    
     init(name: String = "New Timer", duration: TimeInterval = 60, order: Int = 0) {
         self.id = UUID()
         self.name = name

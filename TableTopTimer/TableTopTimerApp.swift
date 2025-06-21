@@ -15,6 +15,11 @@ struct TableTopTimerApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             TimerItem.self,
+            TimerList.self,
+            Counter.self,
+            Automation.self,
+            AutomationTrigger.self,
+            AutomationAction.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

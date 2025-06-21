@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import SwiftData
 import Combine
 import AVFoundation
 
@@ -21,6 +22,8 @@ class TimerManager {
     
     private var timer: Timer?
     private var audioPlayer: AVAudioPlayer?
+    private var automationManager = AutomationManager()
+    var currentTimerItem: TimerItem? { didSet { } }  // Made public for AutomationManager
     
     func startTimers(fromIndex: Int = 0) {
         guard !timers.isEmpty else { return }
@@ -38,12 +41,19 @@ class TimerManager {
         timer = nil
         isPaused = true
         isRunning = false
+        
+        // Pause automations
+        automationManager.pauseAutomations()
     }
     
     func resumeTimer() {
         guard isPaused else { return }
         isPaused = false
         isRunning = true
+        
+        // Resume automations
+        automationManager.resumeAutomations(timerManager: self)
+        
         startCountdown()
     }
     
@@ -51,9 +61,13 @@ class TimerManager {
         timer?.invalidate()
         timer = nil
         currentTimerIndex = nil
+        currentTimerItem = nil
         timeRemaining = 0
         isRunning = false
         isPaused = false
+        
+        // Stop all automations
+        automationManager.stopAutomations()
     }
     
     func skipToNext() {
@@ -78,9 +92,13 @@ class TimerManager {
         }
         
         let currentTimer = timers[index]
+        currentTimerItem = currentTimer
         timeRemaining = currentTimer.duration
         isRunning = true
         isPaused = false
+        
+        // Notify automation manager
+        automationManager.timerStarted(currentTimer, timerManager: self)
         
         startCountdown()
     }
@@ -88,6 +106,11 @@ class TimerManager {
     private func startCountdown() {
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
             self.timeRemaining -= 0.1
+            
+            // Notify automation manager on each tick
+            if let currentTimer = self.currentTimerItem {
+                self.automationManager.timerTick(currentTimer, timeRemaining: self.timeRemaining, timerManager: self)
+            }
             
             if self.timeRemaining <= 0 {
                 self.timerCompleted()
@@ -98,6 +121,11 @@ class TimerManager {
     private func timerCompleted() {
         timer?.invalidate()
         timer = nil
+        
+        // Notify automation manager before default sound
+        if let currentTimer = currentTimerItem {
+            automationManager.timerEnded(currentTimer, timerManager: self)
+        }
         
         playNotificationSound()
         
@@ -157,5 +185,15 @@ class TimerManager {
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    // MARK: - Automation Integration
+    
+    func setModelContext(_ context: ModelContext) {
+        automationManager.setModelContext(context)
+    }
+    
+    func notifyCounterChanged(_ counter: Counter, oldValue: Int, newValue: Int) {
+        automationManager.counterChanged(counter, oldValue: oldValue, newValue: newValue, timerManager: self)
     }
 }

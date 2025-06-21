@@ -9,169 +9,40 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(TimerManager.self) private var timerManager
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \TimerItem.order) private var savedTimers: [TimerItem]
-    
-    @State private var showingAddTimer = false
-    @State private var editingTimer: TimerItem?
-    @State private var showingTimerSheet = false
-    
     var body: some View {
-        NavigationStack {
-            VStack {
-                if timerManager.timers.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Timers", systemImage: "timer")
-                    } description: {
-                        Text("Add timers to get started")
-                    } actions: {
-                        Button("Add Timer") {
-                            showingAddTimer = true
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                } else {
-                    TimerListView(editingTimer: $editingTimer)
-                }
-            }
-            .navigationTitle("Table Top Timer")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingAddTimer = true }) {
-                        Label("Add Timer", systemImage: "plus")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingAddTimer) {
-                AddTimerView()
-            }
-            .sheet(item: $editingTimer) { timer in
-                EditTimerView(timer: timer)
-            }
-            .sheet(isPresented: $showingTimerSheet) {
-                CurrentTimerSheet()
-                    .presentationDetents([.height(300)])
-                    .presentationDragIndicator(.visible)
-                    .interactiveDismissDisabled()
-                    .presentationBackgroundInteraction(.enabled(upThrough: .height(300)))
-                    .presentationCornerRadius(20)
-            }
-            .onAppear {
-                loadTimers()
-            }
-            .onChange(of: timerManager.isRunning) { _, newValue in
-                showingTimerSheet = newValue || timerManager.isPaused
-            }
-            .onChange(of: timerManager.currentTimerIndex) { _, newValue in
-                showingTimerSheet = newValue != nil
-            }
-        }
-    }
-    
-    private func loadTimers() {
-        timerManager.timers = savedTimers.sorted { $0.order < $1.order }
+        TimerListsView()
     }
 }
 
 struct CurrentTimerSheet: View {
     @Environment(TimerManager.self) private var timerManager
+    @Environment(\.modelContext) private var modelContext
+    
+    let timerList: TimerList
+    
+    @State private var showingAddTimer = false
+    @State private var editingTimer: TimerItem?
     
     var body: some View {
-        VStack(spacing: 20) {
-            if let currentIndex = timerManager.currentTimerIndex,
-               currentIndex < timerManager.timers.count {
-                let currentTimer = timerManager.timers[currentIndex]
-                
-                VStack(spacing: 12) {
-                    Text(currentTimer.name)
-                        .font(.title)
-                        .fontWeight(.semibold)
-                    
-                    Text(timerManager.formatTime(timerManager.timeRemaining))
-                        .font(.system(size: 60, weight: .bold, design: .monospaced))
-                        .monospacedDigit()
-                    
-                    if timerManager.autoPlayEnabled {
-                        HStack {
-                            Text("Timer \(currentIndex + 1) of \(timerManager.timers.count)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            if currentIndex < timerManager.timers.count - 1 {
-                                Text("•")
-                                    .foregroundColor(.secondary)
-                                Text("Next: \(timerManager.timers[currentIndex + 1].name)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                }
-                .padding(.top, 20)
-                
-                Spacer()
-                
-                HStack(spacing: 16) {
-                    if timerManager.isRunning {
-                        Button(action: { timerManager.pauseTimer() }) {
-                            Image(systemName: "pause.fill")
-                                .font(.title)
-                        }
-                        .frame(width: 60, height: 60)
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
-                        .clipShape(Circle())
-                        
-                        Button(action: { timerManager.skipToNext() }) {
-                            Image(systemName: "forward.fill")
-                                .font(.title2)
-                        }
-                        .frame(width: 50, height: 50)
-                        .foregroundColor(.primary)
-                        
-                        if currentIndex < timerManager.timers.count - 1 {
-                            Button(action: { timerManager.autoPlayEnabled.toggle() }) {
-                                Image(systemName: timerManager.autoPlayEnabled ? "repeat.circle.fill" : "repeat.circle")
-                                    .font(.title2)
-                            }
-                            .frame(width: 50, height: 50)
-                            .foregroundColor(timerManager.autoPlayEnabled ? .accentColor : .secondary)
-                        }
-                    } else if timerManager.isPaused {
-                        Button(action: { timerManager.stopTimers() }) {
-                            Image(systemName: "stop.fill")
-                                .font(.title2)
-                        }
-                        .frame(width: 50, height: 50)
-                        .foregroundColor(.primary)
-                        
-                        Button(action: { timerManager.resumeTimer() }) {
-                            Image(systemName: "play.fill")
-                                .font(.title)
-                        }
-                        .frame(width: 60, height: 60)
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .clipShape(Circle())
-                        
-                        if currentIndex < timerManager.timers.count - 1 {
-                            Button(action: { timerManager.autoPlayEnabled.toggle() }) {
-                                Image(systemName: timerManager.autoPlayEnabled ? "repeat.circle.fill" : "repeat.circle")
-                                    .font(.title2)
-                            }
-                            .frame(width: 50, height: 50)
-                            .foregroundColor(timerManager.autoPlayEnabled ? .accentColor : .secondary)
-                        }
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 20)
+        GeometryReader { geometry in
+            let isCompact = geometry.size.height < 400
+            
+            if isCompact {
+                CompactTimerView(timerList: timerList)
+            } else {
+                FullScreenTimerView(
+                    timerList: timerList,
+                    showingAddTimer: $showingAddTimer,
+                    editingTimer: $editingTimer
+                )
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.systemBackground))
+        .sheet(isPresented: $showingAddTimer) {
+            AddTimerToListView(timerList: timerList)
+        }
+        .sheet(item: $editingTimer) { timer in
+            EditTimerView(timer: timer)
+        }
     }
 }
 
@@ -378,6 +249,347 @@ struct EditTimerView: View {
         dismiss()
     }
 }
+
+struct CompactTimerView: View {
+    @Environment(TimerManager.self) private var timerManager
+    
+    let timerList: TimerList
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            if let currentIndex = timerManager.currentTimerIndex,
+               currentIndex < timerManager.timers.count {
+                let currentTimer = timerManager.timers[currentIndex]
+                
+                VStack(spacing: 12) {
+                    Text(currentTimer.name)
+                        .font(.title)
+                        .fontWeight(.semibold)
+                    
+                    Text(timerManager.formatTime(timerManager.timeRemaining))
+                        .font(.system(size: 60, weight: .bold, design: .monospaced))
+                        .monospacedDigit()
+                    
+                    if timerManager.autoPlayEnabled {
+                        HStack {
+                            Text("Timer \(currentIndex + 1) of \(timerManager.timers.count)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            if currentIndex < timerManager.timers.count - 1 {
+                                Text("•")
+                                    .foregroundColor(.secondary)
+                                Text("Next: \(timerManager.timers[currentIndex + 1].name)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                }
+                .padding(.top, 20)
+                
+                Spacer()
+                
+                TimerControlsView(currentIndex: currentIndex)
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(UIColor.systemBackground))
+    }
+}
+
+struct FullScreenTimerView: View {
+    @Environment(TimerManager.self) private var timerManager
+    @Environment(\.modelContext) private var modelContext
+    
+    let timerList: TimerList
+    @Binding var showingAddTimer: Bool
+    @Binding var editingTimer: TimerItem?
+    
+    @State private var showingAddCounter = false
+    @State private var editingCounter: Counter?
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            if let currentIndex = timerManager.currentTimerIndex,
+               currentIndex < timerManager.timers.count {
+                let currentTimer = timerManager.timers[currentIndex]
+                
+                VStack(spacing: 16) {
+                    Text(currentTimer.name)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text(timerManager.formatTime(timerManager.timeRemaining))
+                        .font(.system(size: 48, weight: .bold, design: .monospaced))
+                        .monospacedDigit()
+                    
+                    if timerManager.autoPlayEnabled {
+                        HStack {
+                            Text("Timer \(currentIndex + 1) of \(timerManager.timers.count)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            if currentIndex < timerManager.timers.count - 1 {
+                                Text("•")
+                                    .foregroundColor(.secondary)
+                                Text("Next: \(timerManager.timers[currentIndex + 1].name)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    
+                    TimerControlsView(currentIndex: currentIndex)
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("Counters")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                        
+                        if !timerList.counters.isEmpty {
+                            Button(action: { resetAllCounters() }) {
+                                Image(systemName: "arrow.counterclockwise")
+                            }
+                        }
+                        
+                        Button(action: { showingAddCounter = true }) {
+                            Image(systemName: "plus")
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    
+                    if timerList.counters.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "plus.circle.dashed")
+                                .font(.largeTitle)
+                                .foregroundColor(.secondary)
+                            
+                            Text("No counters yet")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            
+                            Text("Tap + to add a counter for this game")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                            
+                            Button("Add Counter") {
+                                showingAddCounter = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, 40)
+                    } else {
+                        List {
+                            ForEach(timerList.counters.sorted(by: { $0.order < $1.order })) { counter in
+                                CounterRow(counter: counter, editingCounter: $editingCounter)
+                            }
+                            .onDelete(perform: deleteCounters)
+                            .onMove(perform: moveCounters)
+                        }
+                        .listStyle(PlainListStyle())
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(UIColor.systemBackground))
+        .sheet(isPresented: $showingAddCounter) {
+            AddCounterView(timerList: timerList)
+        }
+        .sheet(item: $editingCounter) { counter in
+            EditCounterView(counter: counter)
+        }
+    }
+    
+    private func resetAllCounters() {
+        for counter in timerList.counters {
+            counter.reset()
+        }
+        try? modelContext.save()
+    }
+    
+    private func deleteCounters(at offsets: IndexSet) {
+        for index in offsets {
+            let counter = timerList.counters.sorted(by: { $0.order < $1.order })[index]
+            if let timerIndex = timerList.counters.firstIndex(where: { $0.id == counter.id }) {
+                timerList.counters.remove(at: timerIndex)
+            }
+            modelContext.delete(counter)
+        }
+        updateCounterOrders()
+        try? modelContext.save()
+    }
+    
+    private func moveCounters(from source: IndexSet, to destination: Int) {
+        var sortedCounters = timerList.counters.sorted(by: { $0.order < $1.order })
+        sortedCounters.move(fromOffsets: source, toOffset: destination)
+        
+        for (index, counter) in sortedCounters.enumerated() {
+            counter.order = index
+        }
+        
+        try? modelContext.save()
+    }
+    
+    private func updateCounterOrders() {
+        let sortedCounters = timerList.counters.sorted(by: { $0.order < $1.order })
+        for (index, counter) in sortedCounters.enumerated() {
+            counter.order = index
+        }
+    }
+}
+
+struct CounterRow: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(TimerManager.self) private var timerManager
+    let counter: Counter
+    @Binding var editingCounter: Counter?
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(counter.name)
+                    .font(.body)
+                
+                if let min = counter.minValue, let max = counter.maxValue {
+                    Text("Range: \(min) - \(max)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else if let min = counter.minValue {
+                    Text("Min: \(min)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else if let max = counter.maxValue {
+                    Text("Max: \(max)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                editingCounter = counter
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 12) {
+                Button(action: {
+                    let oldValue = counter.value
+                    counter.decrement()
+                    timerManager.notifyCounterChanged(counter, oldValue: oldValue, newValue: counter.value)
+                    try? modelContext.save()
+                }) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(counter.canDecrement ? .red : .gray)
+                }
+                .disabled(!counter.canDecrement)
+                .buttonStyle(PlainButtonStyle())
+                
+                Text("\(counter.value)")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                    .frame(minWidth: 40)
+                    .monospacedDigit()
+                
+                Button(action: {
+                    let oldValue = counter.value
+                    counter.increment()
+                    timerManager.notifyCounterChanged(counter, oldValue: oldValue, newValue: counter.value)
+                    try? modelContext.save()
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(counter.canIncrement ? .green : .gray)
+                }
+                .disabled(!counter.canIncrement)
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+}
+
+struct TimerControlsView: View {
+    @Environment(TimerManager.self) private var timerManager
+    
+    let currentIndex: Int
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            if timerManager.isRunning {
+                Button(action: { timerManager.pauseTimer() }) {
+                    Image(systemName: "pause.fill")
+                        .font(.title)
+                }
+                .frame(width: 60, height: 60)
+                .background(Color.accentColor)
+                .foregroundColor(.white)
+                .clipShape(Circle())
+                
+                Button(action: { timerManager.skipToNext() }) {
+                    Image(systemName: "forward.fill")
+                        .font(.title2)
+                }
+                .frame(width: 50, height: 50)
+                .foregroundColor(.primary)
+                
+                if currentIndex < timerManager.timers.count - 1 {
+                    Button(action: { timerManager.autoPlayEnabled.toggle() }) {
+                        Image(systemName: timerManager.autoPlayEnabled ? "repeat.circle.fill" : "repeat.circle")
+                            .font(.title2)
+                    }
+                    .frame(width: 50, height: 50)
+                    .foregroundColor(timerManager.autoPlayEnabled ? .accentColor : .secondary)
+                }
+            } else if timerManager.isPaused {
+                Button(action: { timerManager.stopTimers() }) {
+                    Image(systemName: "stop.fill")
+                        .font(.title2)
+                }
+                .frame(width: 50, height: 50)
+                .background(Color.red.opacity(0.2))
+                .foregroundColor(.red)
+                .clipShape(Circle())
+                
+                Button(action: { timerManager.resumeTimer() }) {
+                    Image(systemName: "play.fill")
+                        .font(.title)
+                }
+                .frame(width: 60, height: 60)
+                .background(Color.green)
+                .foregroundColor(.white)
+                .clipShape(Circle())
+                
+                if currentIndex < timerManager.timers.count - 1 {
+                    Button(action: { timerManager.autoPlayEnabled.toggle() }) {
+                        Image(systemName: timerManager.autoPlayEnabled ? "repeat.circle.fill" : "repeat.circle")
+                            .font(.title2)
+                    }
+                    .frame(width: 50, height: 50)
+                    .foregroundColor(timerManager.autoPlayEnabled ? .accentColor : .secondary)
+                }
+            }
+        }
+    }
+}
+
 
 #Preview {
     ContentView()
